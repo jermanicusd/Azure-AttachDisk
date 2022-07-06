@@ -1,0 +1,41 @@
+
+Import-Module 'C:\Program Files\WindowsPowerShell\Modules\AzureRM\3.2.0\AzureRM.psd1'
+Import-Module 'C:\Program Files\WindowsPowerShell\Modules\Azure\3.1.0\Azure.psd1'
+
+#---------------------------------------------------------------------------------------------#
+Function Set-ARMCred {
+    if (!($cred)) {$cred = Get-Credential}
+    Add-AzureAccount -Credential $cred
+}
+
+Function Set-ClassicCred {
+    if (!($cred)) {$cred = Get-Credential}
+    Add-AzureRmAccount -Credential $cred
+}
+#---------------------------------------------------------------------------------------------#
+
+Write-Host "This script changes the firewall rules to allow icmp."
+
+$Portal = Read-Host "Please select a portal [1-2]  [Default 1]: 
+1. ARM
+2. Classic"
+
+if ($Portal -eq "" -or $Portal -eq "1") { Set-ARMCred }
+if ($Portal -eq "2") { Set-ClassicCred }
+
+$vmname = Read-Host "Please enter the VM name"
+$cloudservice = Read-Host "Please enter the Cloud Service name"
+
+$WinRMURi = Get-AzureWinRMUri -ServiceName $cloudservice -Name $VMName | Select-Object -ExpandProperty AbsoluteUri
+$Session = New-PSSession -ConnectionUri $WinRMURi -Credential $Cred -Name $vmname -SessionOption (New-PSSessionOption -SkipCACheck) -ErrorAction SilentlyContinue
+
+#Sets firewall rules
+Invoke-command -session $Session -ScriptBlock {
+Import-Module NetSecurity;
+Set-NetFirewallRule -DisplayName “File and Printer Sharing (Echo Request - ICMPv4-In)” -enabled True -ErrorAction Continue;
+Set-NetFirewallRule -DisplayName “File and Printer Sharing (Echo Request - ICMPv6-In)” -enabled True -ErrorAction Continue;
+}
+
+#Cleanup
+if ($WinRMURi) {Remove-Variable WinRMURi}
+if ($Session) {Remove-Variable Session}
